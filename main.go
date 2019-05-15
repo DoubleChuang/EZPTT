@@ -1,18 +1,19 @@
 package main
 
 import (
-	"io"
-	"os"
-	"net"
+	"bytes"
+	"encoding/csv"
+	"errors"
 	"fmt"
+	"golang.org/x/text/encoding/traditionalchinese"
+	"golang.org/x/text/transform"
+	"io"
+	"io/ioutil"
+	"net"
+	"os"
+	"strings"
 	"sync"
 	"time"
-	"bytes"
-	"strings"
-	"io/ioutil"
-	"encoding/csv"
-	"golang.org/x/text/transform"
-	"golang.org/x/text/encoding/traditionalchinese"
 )
 
 func Big5toUTF8(s []byte) ([]byte, error) {
@@ -24,66 +25,58 @@ func Big5toUTF8(s []byte) ([]byte, error) {
 	return d, nil
 }
 
-func Login(wg *sync.WaitGroup, host string, user string, pswd string) bool {
+func Login(wg *sync.WaitGroup, host string, user string, pswd string, outChan chan<- string, errChan chan<- error) {
+	defer wg.Done()
 	var buf [8192]byte
-	
+
 	conn, err := net.Dial("tcp", host+":23")
 	if err != nil {
-		fmt.Sprint(os.Stderr, "Error: %s", err.Error())
-		wg.Done()
-		return false
+		errChan <- err
+		return
 	}
 
 	n, err := conn.Read(buf[0:])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s", err.Error())
-		wg.Done()
-		return false
+		errChan <- err
+		return
 	}
 
 	time.Sleep(1 * time.Second)
 	n, err = conn.Read(buf[0:])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s", err.Error())
-		wg.Done()
-		return false
+		errChan <- err
+		return
 	}
 	dd, _ := Big5toUTF8(buf[0:n])
 
 	if strings.Contains(string(dd), "系統過載") {
-		fmt.Println("系統過載")
-		wg.Done()
-		return false
+
+		errChan <- errors.New("系統過載")
+		return
 	} else if strings.Contains(string(dd), "請輸入代號") {
-		//fmt.Println("!!!!!!Username")
 		n, err = conn.Write([]byte(user + "\r\n"))
 		time.Sleep(1 * time.Second)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
-			wg.Done()
-			return false
+			errChan <- err
+			return
 		}
 		n, err = conn.Write([]byte(pswd + "\r\n"))
 		time.Sleep(1 * time.Second)
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
-			wg.Done()
-			return false
+			errChan <- err
+			return
 		}
-
 		n, err = conn.Read(buf[0:])
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %s", err.Error())
-			wg.Done()
-			return false
+			errChan <- err
+			return
 		}
 		dd, _ = Big5toUTF8(buf[0:n])
 		str := string(dd)
 		if strings.Contains(str, "密碼不對") {
-			fmt.Fprintln(os.Stderr, "密碼不對")
-			wg.Done()
-			return false
+			errChan <- errors.New(user+"密碼不對")
+			return
 		} else if strings.Contains(str, "您想刪除其他重複登入") {
 			fmt.Println("刪除其他重複登入的連線....")
 			n, err = conn.Write([]byte(pswd + "\r\n"))
@@ -102,24 +95,26 @@ func Login(wg *sync.WaitGroup, host string, user string, pswd string) bool {
 			time.Sleep(2 * time.Second)
 			n, err = conn.Read(buf[0:])
 		} else {
-			fmt.Println(str)
-			wg.Done()
-			return false
+			errChan <- errors.New(user+"解析錯誤")
+			return
 		}
-		fmt.Println(user, "登入成功")
+	
 	} else {
-		fmt.Println("Server no power")
-		wg.Done()
-		return false
+		errChan <- errors.New("Server no power")
+		return
 	}
-	wg.Done()
-	return true
+
+	outChan <- user
+	return
 
 }
 func main() {
+	outChan := make(chan string)
+	errChan := make(chan error)
+	finishChan := make(chan struct{})
 	csvFile, err := os.Open("./PttConfig.csv")
 	if err != nil {
-		  panic(err)
+		panic(err)
 	}
 	defer csvFile.Close()
 
@@ -131,13 +126,37 @@ func main() {
 			break
 		} else if err != nil {
 			panic(err) // or handle it another way
-		}else{
+		} else {
 			wg.Add(1)
-			fmt.Println("正再登入", row[0], "...")
-			go Login(&wg, "ptt.cc", row[0], row[1])			
+			t := time.Now()
+			fmt.Printf("[INFO] %d-%02d-%02dT%02d:%02d:%02d-00:00"+
+				"正在登入 %s ... \n",
+				t.Year(), t.Month(), t.Day(),
+				t.Hour(), t.Minute(), t.Second(),
+				row[0])
+
+			go Login(&wg, "ptt.cc", row[0], row[1], outChan, errChan)
 		}
 	}
-	csvFile.Close()
-	wg.Wait()
+
+	go func() {
+		csvFile.Close()
+		wg.Wait()
+		//fmt.Println("Finish all login")
+		close(finishChan)
+	}()
+Loop:
+	for {
+		select {
+		case val := <-outChan:
+			fmt.Printf("\033[0;32;40m[INFO] %s登入成功\033[0m\n", val)
+		case err := <-errChan:
+			fmt.Printf("\033[5;31;40m[ERROR] %s\033[0m\n", err)
+		case <-finishChan:
+			break Loop
+		case <-time.After(10 * time.Second):
+			break Loop
+		}
+	}
 	return
 }
