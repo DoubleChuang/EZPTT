@@ -94,7 +94,11 @@ func Login(wg *sync.WaitGroup, host string, user string, pswd string, outChan ch
 			n, err = conn.Write([]byte("q\r\n"))
 			time.Sleep(2 * time.Second)
 			n, err = conn.Read(buf[0:])
-		} else {
+		} else if strings.Contains(str, "登入中，請稍候..."){
+			time.Sleep(2 * time.Second)
+			n, err = conn.Read(buf[0:])
+		}else {
+			fmt.Println(str)
 			errChan <- errors.New(user+"解析錯誤")
 			return
 		}
