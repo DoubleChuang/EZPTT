@@ -1,117 +1,59 @@
 package main
 
 import (
-	"bytes"
 	"encoding/csv"
-	"errors"
 	"fmt"
-	"golang.org/x/text/encoding/traditionalchinese"
-	"golang.org/x/text/transform"
 	"io"
-	"io/ioutil"
-	"net"
 	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/DoubleChuang/EZPTT/pttclient"
+
+	"github.com/pkg/errors"
 )
 
-func Big5toUTF8(s []byte) ([]byte, error) {
-	reader := transform.NewReader(bytes.NewReader(s), traditionalchinese.Big5.NewDecoder())
-	d, e := ioutil.ReadAll(reader)
-	if e != nil {
-		return nil, e
-	}
-	return d, nil
-}
-
-func Login(wg *sync.WaitGroup, host string, user string, pswd string, outChan chan<- string, errChan chan<- error) {
+//Login 登入PTT
+func Login(wg *sync.WaitGroup, user string, pswd string, outChan chan<- string, errChan chan<- error) {
 	defer wg.Done()
-	var buf [8192]byte
-
-	conn, err := net.Dial("tcp", host+":23")
-	if err != nil {
-		errChan <- err
-		return
-	}
-
-	n, err := conn.Read(buf[0:])
-	if err != nil {
-		errChan <- err
-		return
-	}
-
-	time.Sleep(1 * time.Second)
-	n, err = conn.Read(buf[0:])
-	if err != nil {
-		errChan <- err
-		return
-	}
-	dd, _ := Big5toUTF8(buf[0:n])
-
-	if strings.Contains(string(dd), "系統過載") {
-
-		errChan <- errors.New("系統過載")
-		return
-	} else if strings.Contains(string(dd), "請輸入代號") {
-		n, err = conn.Write([]byte(user + "\r\n"))
-		time.Sleep(1 * time.Second)
-		if err != nil {
-			errChan <- err
-			return
-		}
-		n, err = conn.Write([]byte(pswd + "\r\n"))
-		time.Sleep(1 * time.Second)
-
-		if err != nil {
-			errChan <- err
-			return
-		}
-		n, err = conn.Read(buf[0:])
-		if err != nil {
-			errChan <- err
-			return
-		}
-		dd, _ = Big5toUTF8(buf[0:n])
-		str := string(dd)
+	pttClient := pttclient.NewPTTClient(user, pswd)
+	recv, err := pttClient.Login()
+	if err == nil {
+		str := string(recv)
 		if strings.Contains(str, "密碼不對") {
-			errChan <- errors.New(user+"密碼不對")
+			errChan <- errors.New(user + "密碼不對")
 			return
 		} else if strings.Contains(str, "您想刪除其他重複登入") {
 			fmt.Println("刪除其他重複登入的連線....")
-			n, err = conn.Write([]byte(pswd + "\r\n"))
-			time.Sleep(8 * time.Second)
-			n, err = conn.Read(buf[0:])
+			pttClient.Write(pswd, 8)
+			pttClient.ByPassRead()
 		} else if strings.Contains(str, "請按任意鍵繼續") {
-			n, err = conn.Write([]byte("\r\n"))
-			time.Sleep(2 * time.Second)
-			n, err = conn.Read(buf[0:])
+			pttClient.Write("", 2)
+			pttClient.ByPassRead()
 		} else if strings.Contains(str, "您要刪除以上錯誤嘗試") {
-			n, err = conn.Write([]byte("y\r\n"))
-			time.Sleep(2 * time.Second)
-			n, err = conn.Read(buf[0:])
+			pttClient.Write("y", 2)
+			pttClient.ByPassRead()
 		} else if strings.Contains(str, "您有一篇文章尚未完成") {
-			n, err = conn.Write([]byte("q\r\n"))
+			pttClient.Write("q", 2)
+			pttClient.ByPassRead()
+		} else if strings.Contains(str, "登入中，請稍候...") {
 			time.Sleep(2 * time.Second)
-			n, err = conn.Read(buf[0:])
-		} else if strings.Contains(str, "登入中，請稍候..."){
-			time.Sleep(2 * time.Second)
-			n, err = conn.Read(buf[0:])
-		}else {
+			pttClient.ByPassRead()
+		} else {
 			fmt.Println(str)
-			errChan <- errors.New(user+"解析錯誤")
+			errChan <- errors.New(user + "解析錯誤")
 			return
 		}
-	
 	} else {
+		fmt.Println(err)
 		errChan <- errors.New("Server no power")
 		return
 	}
-
 	outChan <- user
 	return
-
 }
+
 func main() {
 	outChan := make(chan string)
 	errChan := make(chan error)
@@ -139,7 +81,7 @@ func main() {
 				t.Hour(), t.Minute(), t.Second(),
 				row[0])
 
-			go Login(&wg, "ptt.cc", row[0], row[1], outChan, errChan)
+			go Login(&wg, row[0], row[1], outChan, errChan)
 		}
 	}
 
