@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
 	"sync"
@@ -13,6 +14,33 @@ import (
 
 	"github.com/pkg/errors"
 )
+
+var (
+	Info    *log.Logger
+	Warning *log.Logger
+	Error   *log.Logger
+	RED     = "\033[5;31;40m]"
+	GREEN   = "\033[0;32;40m"
+	RESET   = "\033[0m"
+)
+
+func Init(
+	infoHandle io.Writer,
+	warningHandle io.Writer,
+	errorHandle io.Writer) {
+
+	Info = log.New(infoHandle,
+		GREEN+"[INFO] "+RESET,
+		log.Ldate|log.Ltime /*|log.Lshortfile*/)
+
+	Warning = log.New(warningHandle,
+		RED+"[WARNING] "+RESET,
+		log.Ldate|log.Ltime /*|log.Lshortfile*/)
+
+	Error = log.New(errorHandle,
+		RED+"[ERROR] "+RESET,
+		log.Ldate|log.Ltime /*|log.Lshortfile*/)
+}
 
 //Login 登入PTT
 func Login(wg *sync.WaitGroup, user string, pswd string, outChan chan<- string, errChan chan<- error) {
@@ -26,16 +54,28 @@ func Login(wg *sync.WaitGroup, user string, pswd string, outChan chan<- string, 
 			return
 		} else if strings.Contains(str, "您想刪除其他重複登入") {
 			fmt.Println("刪除其他重複登入的連線....")
-			pttClient.Write(pswd, 8)
+			if err = pttClient.Write(pswd, 8); err != nil {
+				errChan <- err
+				return
+			}
 			pttClient.ByPassRead()
 		} else if strings.Contains(str, "請按任意鍵繼續") {
-			pttClient.Write("", 2)
+			if err = pttClient.Write("", 2); err != nil {
+				errChan <- err
+				return
+			}
 			pttClient.ByPassRead()
 		} else if strings.Contains(str, "您要刪除以上錯誤嘗試") {
-			pttClient.Write("y", 2)
+			if err = pttClient.Write("y", 2); err != nil {
+				errChan <- err
+				return
+			}
 			pttClient.ByPassRead()
 		} else if strings.Contains(str, "您有一篇文章尚未完成") {
-			pttClient.Write("q", 2)
+			if err = pttClient.Write("q", 2); err != nil {
+				errChan <- err
+				return
+			}
 			pttClient.ByPassRead()
 		} else if strings.Contains(str, "登入中，請稍候...") {
 			time.Sleep(2 * time.Second)
@@ -51,10 +91,11 @@ func Login(wg *sync.WaitGroup, user string, pswd string, outChan chan<- string, 
 		return
 	}
 	outChan <- user
-	return
 }
 
 func main() {
+	Init(os.Stdout, os.Stdout, os.Stderr)
+
 	outChan := make(chan string)
 	errChan := make(chan error)
 	finishChan := make(chan struct{})
@@ -74,11 +115,7 @@ func main() {
 			panic(err) // or handle it another way
 		} else {
 			wg.Add(1)
-			t := time.Now()
-			fmt.Printf("[INFO] %d-%02d-%02dT%02d:%02d:%02d-00:00"+
-				"正在登入 %s ... \n",
-				t.Year(), t.Month(), t.Day(),
-				t.Hour(), t.Minute(), t.Second(),
+			Info.Printf("正在登入 %s ... \n",
 				row[0])
 
 			go Login(&wg, row[0], row[1], outChan, errChan)
@@ -88,21 +125,19 @@ func main() {
 	go func() {
 		csvFile.Close()
 		wg.Wait()
-		//fmt.Println("Finish all login")
 		close(finishChan)
 	}()
 Loop:
 	for {
 		select {
 		case val := <-outChan:
-			fmt.Printf("\033[0;32;40m[INFO] %s登入成功\033[0m\n", val)
+			Info.Println("登入成功", val)
 		case err := <-errChan:
-			fmt.Printf("\033[5;31;40m[ERROR] %s\033[0m\n", err)
+			Error.Println("登入錯誤", err)
 		case <-finishChan:
 			break Loop
 		case <-time.After(10 * time.Second):
 			break Loop
 		}
 	}
-	return
 }

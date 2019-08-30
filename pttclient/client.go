@@ -34,13 +34,18 @@ func NewPTTClient(user, pswd string) *PTTClient {
 	return &PTTClient{user, pswd, nil}
 }
 
-func (c *PTTClient) Write(s string, sec int) (int, error) {
+func (c *PTTClient) Write(s string, sec int) error {
+	Len := len(s) + 2
 	n, err := c.conn.Write([]byte(s + "\r\n"))
 	if err != nil {
-		return n, errors.Wrapf(err, "Write %s fail", s)
+		return errors.Wrapf(err, "Write %s fail", s)
 	}
+	if Len != n {
+		return errors.New("Send Fail")
+	}
+
 	time.Sleep(time.Duration(sec) * time.Second)
-	return n, err
+	return err
 }
 
 //ByPassRead 將收下來的資訊直接丟棄
@@ -63,23 +68,30 @@ func (c *PTTClient) Login() ([]byte, error) {
 	if err != nil {
 		return utf8Text, errors.Wrap(err, "Connect fail")
 	}
-	err = c.ByPassRead()
+	if err = c.ByPassRead(); err != nil {
+		return utf8Text, err
+	}
 	time.Sleep(1 * time.Second)
 	n, err = c.conn.Read(buf[0:])
-
+	if err != nil {
+		return utf8Text, err
+	}
 	utf8Text, _ = Big5toUTF8(buf[0:n])
 	if strings.Contains(string(utf8Text), "系統過載") {
 		return utf8Text, errors.New("系統過載")
 	} else if strings.Contains(string(utf8Text), "請輸入代號") {
-		_, err = c.Write(c.user, 1)
+		err = c.Write(c.user, 1)
 		if err != nil {
 			return utf8Text, err
 		}
-		_, err = c.Write(c.pswd, 1)
+		err = c.Write(c.pswd, 1)
 		if err != nil {
 			return utf8Text, err
 		}
 		n, err = c.conn.Read(buf[0:])
+		if err != nil {
+			return utf8Text, err
+		}
 		utf8Text, err = Big5toUTF8(buf[0:n])
 	}
 	return utf8Text, nil
