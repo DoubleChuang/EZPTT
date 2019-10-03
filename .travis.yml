@@ -3,7 +3,10 @@ language: go
 go:
   - 1.12.6
 env:
-      - GO111MODULE=on
+  - GO111MODULE=on
+# needed for the snap pipe:
+  - PATH=/snap/bin:$PATH
+
 notifications:
   email: false
 
@@ -15,6 +18,7 @@ install:
 
 script:
   - make
+
 addons:
   apt:
     packages:
@@ -23,12 +27,7 @@ addons:
     # needed for the snap pipe:
     - snapd
 
-env:
-# needed for the snap pipe:
-- PATH=/snap/bin:$PATH
 
-install:
-# needed for the snap pipe:
 
 # needed for the docker pipe
 services:
