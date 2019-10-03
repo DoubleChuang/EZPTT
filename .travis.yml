@@ -2,11 +2,18 @@ language: go
 
 go:
   - 1.12.6
+env:
+      - GO111MODULE=on
+notifications:
+  email: false
 
 sudo: required
 
 install:
+  - go get github.com/pkg/errors
+  - go get golang.org/x/text/encoding/traditionalchinese
+  - go get golang.org/x/text/transform
   - echo "install"
 
 script:
-  - echo "script"
+  - make
