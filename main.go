@@ -2,16 +2,17 @@ package main
 
 import (
 	"encoding/csv"
+	"flag"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/DoubleChuang/EZPTT/pttclient"
-
 	"github.com/pkg/errors"
 )
 
@@ -93,13 +94,35 @@ func Login(wg *sync.WaitGroup, user string, pswd string, outChan chan<- string, 
 	outChan <- user
 }
 
+const usageString string = `Usage:
+    %s [flags] 
+    
+    Download a video from URL.
+    Example: %s -i ./PttConfig.csv
+Flags:`
+
 func main() {
+	var csvFilePath string
+	flag.Usage = func() {
+		fmt.Printf(usageString, os.Args[0], os.Args[0])
+		flag.PrintDefaults()
+	}
+	currentDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err != nil {
+		log.Fatal(err)
+	}
+	csvFilePath = filepath.Join(currentDir, "PttConfig.csv")
+
+	flag.StringVar(&csvFilePath, "i", csvFilePath, "The csv file.")
+	flag.Parse()
+	log.Println(flag.Args())
+
 	Init(os.Stdout, os.Stdout, os.Stderr)
 
 	outChan := make(chan string)
 	errChan := make(chan error)
 	finishChan := make(chan struct{})
-	csvFile, err := os.Open("./PttConfig.csv")
+	csvFile, err := os.Open(csvFilePath)
 	if err != nil {
 		panic(err)
 	}
