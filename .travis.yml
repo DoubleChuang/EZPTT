@@ -10,9 +10,6 @@ notifications:
 sudo: required
 
 install:
-  - go get github.com/pkg/errors
-  - go get golang.org/x/text/encoding/traditionalchinese
-  - go get golang.org/x/text/transform
   - echo "install"
 
 script:
