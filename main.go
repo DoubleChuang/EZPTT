@@ -20,7 +20,7 @@ var (
 	Info    *log.Logger
 	Warning *log.Logger
 	Error   *log.Logger
-	RED     = "\033[5;31;40m]"
+	RED     = "\033[5;31;40m"
 	GREEN   = "\033[0;32;40m"
 	RESET   = "\033[0m"
 )
