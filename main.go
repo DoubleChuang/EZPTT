@@ -31,15 +31,15 @@ func Init(
 	errorHandle io.Writer) {
 
 	Info = log.New(infoHandle,
-		GREEN+"[INFO] "+RESET,
+		GREEN+"[INFO]   "+RESET,
 		log.Ldate|log.Ltime /*|log.Lshortfile*/)
 
 	Warning = log.New(warningHandle,
-		RED+"[WARNING] "+RESET,
+		RED+"[WARNING]"+RESET,
 		log.Ldate|log.Ltime /*|log.Lshortfile*/)
 
 	Error = log.New(errorHandle,
-		RED+"[ERROR] "+RESET,
+		RED+"[ERROR]  "+RESET,
 		log.Ldate|log.Ltime /*|log.Lshortfile*/)
 }
 
@@ -82,7 +82,7 @@ func Login(wg *sync.WaitGroup, user string, pswd string, outChan chan<- string, 
 			time.Sleep(2 * time.Second)
 			pttClient.ByPassRead()
 		} else {
-			fmt.Println(str)
+			//fmt.Println(str)
 			errChan <- errors.New(user + "解析錯誤")
 			return
 		}
@@ -103,28 +103,28 @@ Flags:`
 
 func main() {
 	var csvFilePath string
+	Init(os.Stdout, os.Stdout, os.Stderr)
 	flag.Usage = func() {
 		fmt.Printf(usageString, os.Args[0], os.Args[0])
 		flag.PrintDefaults()
 	}
 	currentDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
 	if err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 	csvFilePath = filepath.Join(currentDir, "PttConfig.csv")
 
 	flag.StringVar(&csvFilePath, "i", csvFilePath, "The csv file.")
 	flag.Parse()
-	log.Println(flag.Args())
-
-	Init(os.Stdout, os.Stdout, os.Stderr)
+	Info.Println("Args:", flag.Args())
 
 	outChan := make(chan string)
 	errChan := make(chan error)
 	finishChan := make(chan struct{})
 	csvFile, err := os.Open(csvFilePath)
 	if err != nil {
-		panic(err)
+		Error.Fatal(err)
+		return
 	}
 	defer csvFile.Close()
 
@@ -135,7 +135,7 @@ func main() {
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			panic(err) // or handle it another way
+			Error.Fatal(err) // or handle it another way
 		} else {
 			wg.Add(1)
 			Info.Printf("正在登入 %s ... \n",
@@ -156,7 +156,7 @@ Loop:
 		case val := <-outChan:
 			Info.Println("登入成功", val)
 		case err := <-errChan:
-			Error.Println("登入錯誤", err)
+			Error.Fatal("登入錯誤", err)
 		case <-finishChan:
 			break Loop
 		case <-time.After(10 * time.Second):
