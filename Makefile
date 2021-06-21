@@ -36,6 +36,8 @@ mips:
 	make $(MIPS_BIN)
 debug:
 	make $(DEBUG_BIN)
+local:
+	@CGO_ENABLED=0 go build -ldflags "-s -w" -o $(BIN_DIR)$(BIN) $(SRC)
 
 $(DEBUG_BIN):
 	@go build -gcflags "-N -l" -o $(BIN) $(SRC)
@@ -53,4 +55,4 @@ $(MIPS_BIN):
 
 clean:
 	@rm -rf $(BIN_DIR)
-.PHONY: all debug release win $(DEBUG_BIN)  clean
+.PHONY: all debug release win $(DEBUG_BIN) clean

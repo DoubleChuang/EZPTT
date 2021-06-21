@@ -58,6 +58,14 @@ func (c *PTTClient) ByPassRead() error {
 	return err
 }
 
+func (c *PTTClient) Logout() {
+	c.conn.Close()
+}
+
+func (c PTTClient) Username() string {
+	return c.user
+}
+
 //Login 登入PTT並回傳登錄狀態
 func (c *PTTClient) Login() ([]byte, error) {
 	var n int
