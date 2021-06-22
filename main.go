@@ -36,39 +36,40 @@ func Login(wg *sync.WaitGroup, user string, pswd string, outChan chan<- string, 
 	}()
 
 	str := string(recv)
-	if strings.Contains(str, "密碼不對") {
+	switch {
+	case strings.Contains(str, "密碼不對"):
 		errChan <- errors.New(user + "密碼不對")
 		return
-	} else if strings.Contains(str, "您想刪除其他重複登入") {
+	case strings.Contains(str, "您想刪除其他重複登入"):
 		fmt.Println("刪除其他重複登入的連線....")
 		if err = pttClient.Write(pswd, 8); err != nil {
 			errChan <- err
 			return
 		}
 		pttClient.ByPassRead()
-	} else if strings.Contains(str, "請按任意鍵繼續") {
+	case strings.Contains(str, "請按任意鍵繼續"):
 		if err = pttClient.Write("", 2); err != nil {
 			errChan <- err
 			return
 		}
 		pttClient.ByPassRead()
-	} else if strings.Contains(str, "您要刪除以上錯誤嘗試") {
+	case strings.Contains(str, "您要刪除以上錯誤嘗試"):
 		if err = pttClient.Write("y", 2); err != nil {
 			errChan <- err
 			return
 		}
 		pttClient.ByPassRead()
-	} else if strings.Contains(str, "您有一篇文章尚未完成") {
+	case strings.Contains(str, "您有一篇文章尚未完成"):
 		if err = pttClient.Write("q", 2); err != nil {
 			errChan <- err
 			return
 		}
 		pttClient.ByPassRead()
-	} else if strings.Contains(str, "登入中，請稍候...") {
+	case strings.Contains(str, "登入中，請稍候..."):
 		time.Sleep(2 * time.Second)
 
 		pttClient.ByPassRead()
-	} else {
+	default:
 		//fmt.Println(str)
 		errChan <- errors.New(user + "解析錯誤")
 		return
