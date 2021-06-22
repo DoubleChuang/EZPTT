@@ -17,7 +17,7 @@ install:
   - echo "install"
 
 script:
-  - make
+  - make 
 
 #addons:
 #  apt:
