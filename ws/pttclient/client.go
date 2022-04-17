@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/DoubleChuang/EZPTT/ws/wsclinet"
@@ -20,20 +21,28 @@ const (
 )
 
 type PttClient struct {
-	clint      *wsclinet.WsClient
+	client     *wsclinet.WsClient
 	Username   string
 	Password   string
 	context    context.Context
 	cancelFunc context.CancelFunc
 	status     PttClientStatus
+	mu         sync.Mutex
 }
 
 func (c *PttClient) Monitor() {
+
 	defer func() {
 		log.Println("[" + c.Username + "] Monitor shutdown")
 	}()
+	if c.client == nil {
+		return
+	}
 	for {
-		bMsg, err := c.clint.Read()
+		if c.client == nil {
+			return
+		}
+		bMsg, err := c.client.Read()
 		if err != nil {
 			log.Println("read:", err)
 			return
@@ -48,20 +57,20 @@ func (c *PttClient) Monitor() {
 		} else if strings.Contains(msg, "請輸入代號") {
 			log.Println("logging in [" + c.Username + "]...")
 			// input username
-			if err := c.clint.WriteBinary([]byte(c.Username)); err != nil {
+			if err := c.client.WriteBinary([]byte(c.Username)); err != nil {
 				log.Println(err)
 				c.Close()
 				return
 			}
 
 			// input password
-			if err := c.clint.WriteBinary([]byte(c.Password)); err != nil {
+			if err := c.client.WriteBinary([]byte(c.Password)); err != nil {
 				log.Println(err)
 				c.Close()
 				return
 			}
 
-			bMsg, err := c.clint.Read()
+			bMsg, err := c.client.Read()
 			if err != nil {
 				log.Println(err)
 				c.Close()
@@ -76,6 +85,8 @@ func (c *PttClient) Monitor() {
 			}
 
 			log.Println(msg)
+			c.mu.Lock()
+			defer c.mu.Unlock()
 			c.status = LoggedIn
 		}
 	}
@@ -99,7 +110,7 @@ func NewPTTClient(username string, password string) (*PttClient, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	client := &PttClient{
-		clint:      c,
+		client:     c,
 		Username:   username,
 		Password:   password,
 		context:    ctx,
@@ -129,9 +140,11 @@ func (c *PttClient) Login() error {
 }
 
 func (c *PttClient) Close() error {
-	if err := c.clint.Close(); err != nil {
+	if err := c.client.Close(); err != nil {
 		return err
 	}
-	c.clint = nil
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.client = nil
 	return nil
 }

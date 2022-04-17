@@ -142,15 +142,16 @@ func LoginAll(pttAccounts []PTTAccount) {
 	for _, ptt := range pttAccounts {
 		Logger.Infof("正在登入 %s ... \n", ptt.Username)
 		wg.Add(1)
-		go func(wg *sync.WaitGroup, outChan chan<- string, errChan chan<- error) {
+		go func(username, password string, wg *sync.WaitGroup, outChan chan<- string, errChan chan<- error) {
 			defer wg.Done()
-			c, err := wspttclient.NewPTTClient(ptt.Username, ptt.Password)
+			c, err := wspttclient.NewPTTClient(username, password)
 			if err != nil {
-				errChan <- errors.New("[" + ptt.Username + "]" + err.Error())
+				errChan <- errors.New("[" + username + "]" + err.Error())
 				return
 			}
+			c.Close()
 			outChan <- c.Username
-		}(&wg, outChan, errChan)
+		}(ptt.Username, ptt.Password, &wg, outChan, errChan)
 	}
 	go func() {
 		wg.Wait()
