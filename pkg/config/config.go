@@ -19,8 +19,8 @@ func ReadConfig() error {
 	flag.StringVar(&confPath, "c", "", "Configuration file path.")
 	flag.Parse()
 	viper.SetConfigType("yaml")
-	viper.AutomaticEnv()                 // read in environment variables that match
-	viper.SetEnvPrefix("nilvana_bridge") // will be uppercased automatically
+	viper.AutomaticEnv()        // read in environment variables that match
+	viper.SetEnvPrefix("ezptt") // will be uppercased automatically
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	var (
 		err     error
