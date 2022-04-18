@@ -15,7 +15,6 @@ import (
 	. "github.com/DoubleChuang/EZPTT/pkg/log"
 	"github.com/DoubleChuang/EZPTT/pttclient"
 	wspttclient "github.com/DoubleChuang/EZPTT/ws/pttclient"
-	"github.com/spf13/viper"
 
 	"github.com/pkg/errors"
 	"github.com/robfig/cron"
@@ -172,13 +171,14 @@ Loop:
 	}
 }
 
-func SetupCron() {
+func SetupCron(config *config.Config) {
 	c := cron.New()
 	pttAccounts, err := GetPTTAccountFromCsv(csvFilePath)
 	if err != nil {
 		Logger.Fatal(err)
 	}
-	c.AddFunc(viper.GetString("CRON.SPEC"), func() {
+	Logger.Debugf("CRON_SPEC:'%s'", config.CronSpec)
+	c.AddFunc(config.CronSpec, func() {
 		Logger.Info("Run LoginAll...")
 		LoginAll(pttAccounts)
 	})
@@ -187,10 +187,16 @@ func SetupCron() {
 }
 
 func main() {
-	config.SetDefaults()
+
 	InitLog()
 	ParseFlag()
-	SetupCron()
+
+	cfg, err := config.LoadConfig(".")
+	if err != nil {
+		Logger.Fatal("Failed to load config")
+	}
+
+	SetupCron(&cfg)
 
 	t1 := time.NewTimer(time.Second * 10)
 	for {
