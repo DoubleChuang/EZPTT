@@ -54,7 +54,11 @@ func (c *WsClient) Conn() (*http.Response, error) {
 	)
 	c.RawConn, res, err = websocket.DefaultDialer.Dial(c.URL.String(), c.Headers)
 	if err != nil {
-		log.Fatal("dial:", err, " ", res.Status)
+		status := ""
+		if res != nil {
+			status = res.Status
+		}
+		log.Fatal("dial:", err, " ", status)
 		return res, err
 	}
 
