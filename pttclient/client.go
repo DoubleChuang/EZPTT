@@ -101,6 +101,9 @@ func (c *PTTClient) Login() ([]byte, error) {
 			return utf8Text, err
 		}
 		utf8Text, err = Big5toUTF8(buf[0:n])
+		if err != nil {
+			return utf8Text, err
+		}
 	}
 	return utf8Text, nil
 }
