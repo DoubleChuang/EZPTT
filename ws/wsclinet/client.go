@@ -2,10 +2,12 @@ package wsclinet
 
 import (
 	"bytes"
+	"errors"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
+	"sync"
 
 	"github.com/gorilla/websocket"
 	"golang.org/x/text/encoding/traditionalchinese"
@@ -26,6 +28,7 @@ type WsClient struct {
 	Headers http.Header
 	URL     *url.URL
 	RawConn *websocket.Conn
+	mu      sync.Mutex
 }
 
 func NewWsClient(URL string, headers http.Header) (*WsClient, error) {
@@ -70,6 +73,8 @@ func (c *WsClient) Close() error {
 		return nil
 	}
 
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	err := c.RawConn.WriteMessage(
 		websocket.CloseMessage,
 		websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
@@ -104,6 +109,12 @@ func (c *WsClient) Read() ([]byte, error) {
 }
 
 func (c *WsClient) Write(data []byte) error {
+	if c.RawConn == nil {
+		return errors.New("Disconnect")
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	err := c.RawConn.WriteMessage(websocket.TextMessage, append(data, []byte("\r\n")...))
 	if err != nil {
 		log.Println(err)
@@ -114,6 +125,12 @@ func (c *WsClient) Write(data []byte) error {
 }
 
 func (c *WsClient) WriteBinary(data []byte) error {
+	if c.RawConn == nil {
+		return errors.New("Disconnect")
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	err := c.RawConn.WriteMessage(websocket.BinaryMessage, append(data, []byte("\r\n")...))
 	if err != nil {
 		log.Println(err)

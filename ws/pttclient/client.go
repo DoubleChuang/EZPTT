@@ -58,28 +58,28 @@ func (c *PttClient) Monitor() {
 			log.Println("logging in [" + c.Username + "]...")
 			// input username
 			if err := c.client.WriteBinary([]byte(c.Username)); err != nil {
-				log.Println(err)
+				log.Println("Failed to input username", err)
 				c.Close()
 				return
 			}
 
 			// input password
 			if err := c.client.WriteBinary([]byte(c.Password)); err != nil {
-				log.Println(err)
+				log.Println("Failed to input password", err)
 				c.Close()
 				return
 			}
 
 			bMsg, err := c.client.Read()
 			if err != nil {
-				log.Println(err)
+				log.Println("Failed to read login screen", err)
 				c.Close()
 				return
 			}
 			msg = string(bMsg)
 
 			if !strings.Contains(msg, "密碼正確！ 開始登入系統...") {
-				log.Println("Failed to login")
+				log.Println("Failed to parser screen")
 				c.Close()
 				return
 			}
@@ -140,9 +140,14 @@ func (c *PttClient) Login() error {
 }
 
 func (c *PttClient) Close() error {
+	if c.client != nil {
+		return nil
+	}
+
 	if err := c.client.Close(); err != nil {
 		return err
 	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.client = nil
