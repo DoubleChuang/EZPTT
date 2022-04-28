@@ -57,7 +57,13 @@ func (c *WsClient) Conn() (*http.Response, error) {
 		err error
 	)
 	// ignore certificate signed by unknown authority
-	c.RawConn, res, err = websocket.Dialer{TLSClientConfig: &tls.Config{RootCAs: nil, InsecureSkipVerify: true}}.Dial(c.URL.String(), c.Headers)	
+	config := tls.Config{InsecureSkipVerify: true}
+	dialer := websocket.Dialer{
+		TLSClientConfig: &config,
+	}
+	
+	
+	c.RawConn, res, err = dialer.Dial(c.URL.String(), c.Headers)	
 	if err != nil {
 		status := ""
 		if res != nil {
