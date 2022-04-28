@@ -1,7 +1,8 @@
-package wsclinet
+package wsclient
 
 import (
 	"bytes"
+	"crypto/tls"
 	"errors"
 	"io/ioutil"
 	"log"
@@ -55,7 +56,8 @@ func (c *WsClient) Conn() (*http.Response, error) {
 		res *http.Response
 		err error
 	)
-	c.RawConn, res, err = websocket.DefaultDialer.Dial(c.URL.String(), c.Headers)
+	// ignore certificate signed by unknown authority
+	c.RawConn, res, err = websocket.Dialer{TLSClientConfig: &tls.Config{RootCAs: nil, InsecureSkipVerify: true}}.Dial(c.URL.String(), c.Headers)	
 	if err != nil {
 		status := ""
 		if res != nil {

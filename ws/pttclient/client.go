@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DoubleChuang/EZPTT/ws/wsclinet"
+	"github.com/DoubleChuang/EZPTT/ws/wsclient"
 )
 
 type PttClientStatus int
@@ -21,7 +21,7 @@ const (
 )
 
 type PttClient struct {
-	client     *wsclinet.WsClient
+	client     *wsclient.WsClient
 	Username   string
 	Password   string
 	context    context.Context
@@ -97,7 +97,7 @@ func NewPTTClient(username string, password string) (*PttClient, error) {
 		"Origin": {"https://term.ptt.cc"},
 	}
 
-	c, err := wsclinet.NewWsClient("wss://ws.ptt.cc/bbs", wsHeaders)
+	c, err := wsclient.NewWsClient("wss://ws.ptt.cc/bbs", wsHeaders)
 	if err != nil {
 		return nil, err
 	}
