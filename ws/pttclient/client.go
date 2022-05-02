@@ -30,6 +30,41 @@ type PttClient struct {
 	mu         sync.Mutex
 }
 
+func (c *PttClient) InputUsername() error {
+	if c.client == nil {
+		return errors.New("client is close")
+	}
+
+	if err := c.client.WriteBinary([]byte(c.Username)); err != nil {
+		log.Println("Failed to input username", err)
+		return err
+	}
+
+	return nil
+}
+
+func (c *PttClient) InputPassword() error {
+	if c.client == nil {
+		return errors.New("client is close")
+	}
+
+	if err := c.client.WriteBinary([]byte(c.Password)); err != nil {
+		log.Println("Failed to input username", err)
+		return err
+	}
+
+	return nil
+}
+
+func (c *PttClient) InputAnyKey() error {
+	// input any key to continue
+	if err := c.client.WriteBinary([]byte("")); err != nil {
+		log.Println("Failed to input any key", err)
+		return err
+	}
+	return nil
+}
+
 func (c *PttClient) Monitor() {
 
 	defer func() {
@@ -38,6 +73,11 @@ func (c *PttClient) Monitor() {
 	if c.client == nil {
 		return
 	}
+
+	defer func() {
+		c.Close()
+	}()
+
 	for {
 		if c.client == nil {
 			return
@@ -52,42 +92,49 @@ func (c *PttClient) Monitor() {
 
 		if strings.Contains(msg, "系統過載") {
 			log.Println("PTT sever is overload")
-			c.Close()
 			return
 		} else if strings.Contains(msg, "請輸入代號") {
 			log.Println("logging in [" + c.Username + "]...")
 			// input username
-			if err := c.client.WriteBinary([]byte(c.Username)); err != nil {
+			if err := c.InputUsername(); err != nil {
 				log.Println("Failed to input username", err)
-				c.Close()
 				return
 			}
-
 			// input password
-			if err := c.client.WriteBinary([]byte(c.Password)); err != nil {
+			if err := c.InputPassword(); err != nil {
 				log.Println("Failed to input password", err)
-				c.Close()
 				return
 			}
-
 			bMsg, err := c.client.Read()
 			if err != nil {
 				log.Println("Failed to read login screen", err)
-				c.Close()
 				return
 			}
+			// read login screen
 			msg = string(bMsg)
+			time.Sleep(2 * time.Second)
+			switch {
+			case strings.Contains(msg, "登入中，請稍候..."):
+				time.Sleep(2 * time.Second)
+				log.Println("Login 1!!")
+			case strings.Contains(msg, "密碼正確！ 開始登入系統..."):
+				log.Println("Login 2!!")
+			case strings.Contains(msg, "請按任意鍵繼續"):
+				log.Println("Login 3!!")
+				if err := c.InputAnyKey(); err != nil {
+					log.Println("error:", err)
+					return
+				}
+			}
 
-			if !strings.Contains(msg, "密碼正確！ 開始登入系統...") {
-				log.Println("Failed to parser screen")
-				c.Close()
+			if err := c.InputAnyKey(); err != nil {
+				log.Println("error:", err)
 				return
 			}
 
-			log.Println(msg)
 			c.mu.Lock()
-			defer c.mu.Unlock()
 			c.status = LoggedIn
+			c.mu.Unlock()
 		}
 	}
 }
