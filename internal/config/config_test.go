@@ -31,6 +31,7 @@ func TestLoadFileAndEnvPrecedence(t *testing.T) {
 		"ACCOUNTS_FILE=/data/accounts.csv",
 		"LOGIN_TIMEOUT=45s",
 		"MAX_CONCURRENCY=2",
+		"RUN_ON_START=true",
 		"",
 	}, "\n")
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
@@ -57,6 +58,9 @@ func TestLoadFileAndEnvPrecedence(t *testing.T) {
 	}
 	if cfg.MaxConcurrency != 2 {
 		t.Fatalf("MaxConcurrency = %d", cfg.MaxConcurrency)
+	}
+	if !cfg.RunOnStart {
+		t.Fatal("RUN_ON_START was not applied")
 	}
 }
 

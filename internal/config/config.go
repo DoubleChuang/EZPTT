@@ -31,6 +31,10 @@ type Config struct {
 	Hold time.Duration
 	// InsecureTLS disables certificate verification (only for broken setups).
 	InsecureTLS bool
+	// RunOnStart logs every account in once right after startup, then follows
+	// the cron spec. Handy in a container where a restart is the only way to
+	// trigger a run.
+	RunOnStart bool
 	// WSURL is the PTT websocket endpoint.
 	WSURL string
 	// Origin is the Origin header term.ptt.cc expects.
@@ -51,6 +55,7 @@ func Defaults() Config {
 		ReadTimeout:    30 * time.Second,
 		Hold:           0,
 		InsecureTLS:    false,
+		RunOnStart:     false,
 		WSURL:          "wss://ws.ptt.cc/bbs",
 		Origin:         "https://term.ptt.cc",
 	}
@@ -161,6 +166,12 @@ func apply(cfg *Config, values map[string]string, source string) error {
 				return fmt.Errorf("%s: INSECURE_TLS=%q 不是 true/false", source, value)
 			}
 			cfg.InsecureTLS = b
+		case "RUN_ON_START":
+			b, err := strconv.ParseBool(value)
+			if err != nil {
+				return fmt.Errorf("%s: RUN_ON_START=%q 不是 true/false", source, value)
+			}
+			cfg.RunOnStart = b
 		case "WS_URL":
 			cfg.WSURL = value
 		case "ORIGIN":
@@ -183,7 +194,8 @@ func envValues() map[string]string {
 	out := map[string]string{}
 	for _, key := range []string{
 		"LOG_LEVEL", "CRON_SPEC", "ACCOUNTS_FILE", "MAX_CONCURRENCY",
-		"LOGIN_TIMEOUT", "READ_TIMEOUT", "HOLD", "INSECURE_TLS", "WS_URL", "ORIGIN",
+		"LOGIN_TIMEOUT", "READ_TIMEOUT", "HOLD", "INSECURE_TLS", "RUN_ON_START",
+		"WS_URL", "ORIGIN",
 	} {
 		if v, ok := os.LookupEnv(EnvPrefix + key); ok {
 			out[EnvPrefix+key] = v

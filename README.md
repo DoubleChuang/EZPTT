@@ -63,10 +63,13 @@ chmod 600 PttConfig.csv
 | `READ_TIMEOUT` | `30s` | 等待下一個畫面的逾時 |
 | `HOLD` | `0` | 登入成功後保持連線的時間，`0` = 登入完就斷線 |
 | `INSECURE_TLS` | `false` | 跳過 TLS 憑證驗證，只在主機缺 CA 憑證時使用 |
+| `RUN_ON_START` | `false` | 啟動後先跑一輪再照排程；容器重啟就能立即驗證帳號 |
 | `WS_URL` | `wss://ws.ptt.cc/bbs` | PTT websocket 端點 |
 | `ORIGIN` | `https://term.ptt.cc` | 連線帶的 Origin header |
 
 `CRON_SPEC` 用**容器/主機的本地時間**，映像預設 `TZ=Asia/Taipei`；自己跑 binary 時請確認 `TZ`。
+
+帳號檔每次執行前都會重讀，換帳號不用重建容器。
 
 ## 部署到 Raspberry Pi
 
@@ -75,10 +78,14 @@ Pi 是 aarch64（64 位元）就直接用 `linux/arm64` 映像：
 ```console
 ssh pi@<host>
 mkdir -p ~/docker/ezptt/data && cd ~/docker/ezptt
-# 放好 docker-compose.yml、ezptt.env、data/PttConfig.csv
+# 放好 docker-compose.yml、ezptt.env、data/PttConfig.csv（chmod 600）
 docker compose up -d
-docker compose logs --tail=20
+docker compose logs -f
 ```
+
+`docker-compose.yml` 預設用 `user: "${PUID:-1000}:${PGID:-1000}"` 執行，因為帳號檔是 `0600` 且屬於主機使用者；映像本身預設是 uid 10001，若直接 `docker run` 就必須 `chown 10001:10001 data/PttConfig.csv`。
+
+`ezptt.env` 設 `RUN_ON_START=true` 時，`docker compose up -d` 或 `restart` 會立刻登入一輪，log 就能看到結果，不必等到 cron 時間。
 
 `restart: unless-stopped` 讓它在 PTT 網路抖動、主機重開後自己回來；log 有 `max-size` 上限，不會把 SD 卡寫滿。
 

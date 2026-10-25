@@ -116,17 +116,23 @@ func run(argv []string) error {
 
 	list, accountWarnings, err := accounts.Load(cfg.AccountsFile)
 	if err != nil {
-		return err
+		if *once {
+			return err
+		}
+		// Daemon mode stays up: the file is re-read before every run, so the
+		// container can start before the account file is in place.
+		logger.Error("帳號檔讀不到，排程照常啟動，每次執行前會重讀", "file", cfg.AccountsFile, "err", err)
+	} else {
+		for _, w := range accountWarnings {
+			logger.Warn(w)
+		}
+		logger.Info("載入帳號", "count", len(list), "file", cfg.AccountsFile, "version", version)
 	}
-	for _, w := range accountWarnings {
-		logger.Warn(w)
-	}
-	logger.Info("載入帳號", "count", len(list), "file", cfg.AccountsFile, "version", version)
 
 	if *once {
 		return runOnce(ctx, runner, list, logger)
 	}
-	return serve(ctx, runner, list, cfg, logger)
+	return serve(ctx, runner, cfg, logger)
 }
 
 // runProbe proves the transport works without touching any credential.
@@ -166,7 +172,7 @@ func runOnce(ctx context.Context, runner *session.Runner, list []accounts.Accoun
 	return nil
 }
 
-func serve(ctx context.Context, runner *session.Runner, list []accounts.Account, cfg config.Config, logger *slog.Logger) error {
+func serve(ctx context.Context, runner *session.Runner, cfg config.Config, logger *slog.Logger) error {
 	var cronOptions []cron.Option
 	if fields := strings.Fields(cfg.CronSpec); len(fields) == 6 {
 		cronOptions = append(cronOptions, cron.WithSeconds())
@@ -174,6 +180,15 @@ func serve(ctx context.Context, runner *session.Runner, list []accounts.Account,
 	scheduler := cron.New(cronOptions...)
 
 	job := func() {
+		// Re-read every run: replacing the CSV does not need a restart.
+		list, warnings, err := accounts.Load(cfg.AccountsFile)
+		if err != nil {
+			logger.Error("讀取帳號失敗，本輪跳過", "file", cfg.AccountsFile, "err", err)
+			return
+		}
+		for _, w := range warnings {
+			logger.Warn(w)
+		}
 		logger.Info("開始登入", "accounts", len(list))
 		results := runner.LoginAll(ctx, list)
 		ok, failed := session.Summarise(results)
@@ -185,6 +200,11 @@ func serve(ctx context.Context, runner *session.Runner, list []accounts.Account,
 	}
 	scheduler.Start()
 	logger.Info("排程啟動", "spec", cfg.CronSpec, "next", nextRun(scheduler), "concurrency", cfg.MaxConcurrency)
+
+	if cfg.RunOnStart {
+		logger.Info("RUN_ON_START=true，先跑一輪")
+		go job()
+	}
 
 	<-ctx.Done()
 	logger.Info("收到停止訊號，等待進行中的登入結束")
