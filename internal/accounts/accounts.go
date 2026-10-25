@@ -88,7 +88,7 @@ func Load(path string) ([]Account, []string, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("開啟帳號檔 %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	list, warnings, err := Parse(f)
 	if err != nil {

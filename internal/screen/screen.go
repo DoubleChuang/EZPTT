@@ -15,7 +15,7 @@ import (
 // ansiEscape matches the colour and cursor sequences PTT mixes into the text
 // ("\x1b[1m密碼正確\x1b[m"). Matching has to happen on the stripped screen,
 // otherwise a keyword split by a colour change never matches.
-var ansiEscape = regexp.MustCompile("\\x1b\\[[0-9;]*[A-Za-z]")
+var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
 
 // Normalise removes ANSI escape sequences.
 func Normalise(text string) string {

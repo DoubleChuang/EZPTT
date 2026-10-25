@@ -47,9 +47,9 @@ func run(argv []string) error {
 	)
 	fs.Usage = func() {
 		out := fs.Output()
-		fmt.Fprintf(out, "EZPTT %s — 定時登入 PTT，讓帳號保持活躍\n\n用法:\n  ezptt [旗標]\n\n旗標:\n", version)
+		_, _ = fmt.Fprintf(out, "EZPTT %s — 定時登入 PTT，讓帳號保持活躍\n\n用法:\n  ezptt [旗標]\n\n旗標:\n", version)
 		fs.PrintDefaults()
-		fmt.Fprint(out, `
+		_, _ = fmt.Fprint(out, `
 環境變數（前綴 EZPTT_）:
   LOG_LEVEL        debug/info/warn/error（或舊版 0-3），預設 info
   CRON_SPEC        cron 表示式，5 欄（分 時 日 月 週）或 6 欄（秒 …），預設 "5 3 * * *"

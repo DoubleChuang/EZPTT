@@ -27,7 +27,7 @@ func testServer(t *testing.T) (*httptest.Server, chan received) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		prompt, err := traditionalchinese.Big5.NewEncoder().Bytes([]byte("請輸入代號"))
 		if err != nil {
