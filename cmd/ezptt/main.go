@@ -24,6 +24,7 @@ import (
 	"github.com/DoubleChuang/EZPTT/internal/screen"
 	"github.com/DoubleChuang/EZPTT/internal/session"
 	"github.com/DoubleChuang/EZPTT/internal/transport/ws"
+	"github.com/DoubleChuang/EZPTT/internal/vault"
 )
 
 // version is stamped at build time (goreleaser / -ldflags "-X main.version=…").
@@ -37,6 +38,19 @@ func main() {
 }
 
 func run(argv []string) error {
+	// Sub-commands keep the flag-only invocation working: `ezptt` bare still
+	// runs the scheduler, `ezptt encrypt …` is a separate tool.
+	if len(argv) > 0 {
+		switch argv[0] {
+		case "keygen":
+			return keygenCommand(argv[1:])
+		case "encrypt":
+			return encryptCommand(argv[1:])
+		case "decrypt":
+			return decryptCommand(argv[1:])
+		}
+	}
+
 	fs := flag.NewFlagSet("ezptt", flag.ContinueOnError)
 	var (
 		configPath   = fs.String("config", "", "設定檔路徑（KEY=VALUE）；預設讀 ./.env")
@@ -59,6 +73,8 @@ func run(argv []string) error {
   READ_TIMEOUT     等待下一個畫面的逾時，預設 30s
   HOLD             登入成功後保持連線的時間，預設 0
   INSECURE_TLS     設 true 可跳過 TLS 憑證驗證（不建議）
+  ENCRYPTION_KEY   帳號檔的 base64 AES-256 金鑰
+  KEY_FILE         金鑰檔路徑（0600），ENCRYPTION_KEY 為空時使用
   WS_URL           websocket 端點，預設 wss://ws.ptt.cc/bbs
   ORIGIN           Origin header，預設 https://term.ptt.cc
 
@@ -101,6 +117,12 @@ func run(argv []string) error {
 		InsecureSkipVerify: cfg.InsecureTLS,
 		ReadTimeout:        cfg.ReadTimeout,
 	})
+	key, err := resolveKey(cfg)
+	if err != nil {
+		return err
+	}
+	decode := accountDecoder(key)
+
 	runner := session.NewRunner(dialer, logger, session.Options{
 		LoginTimeout: cfg.LoginTimeout,
 		Hold:         cfg.Hold,
@@ -114,7 +136,7 @@ func run(argv []string) error {
 		return runProbe(ctx, dialer, logger)
 	}
 
-	list, accountWarnings, err := accounts.Load(cfg.AccountsFile)
+	list, accountWarnings, err := accounts.Load(cfg.AccountsFile, decode)
 	if err != nil {
 		if *once {
 			return err
@@ -132,7 +154,7 @@ func run(argv []string) error {
 	if *once {
 		return runOnce(ctx, runner, list, logger)
 	}
-	return serve(ctx, runner, cfg, logger)
+	return serve(ctx, runner, cfg, decode, logger)
 }
 
 // runProbe proves the transport works without touching any credential.
@@ -172,7 +194,7 @@ func runOnce(ctx context.Context, runner *session.Runner, list []accounts.Accoun
 	return nil
 }
 
-func serve(ctx context.Context, runner *session.Runner, cfg config.Config, logger *slog.Logger) error {
+func serve(ctx context.Context, runner *session.Runner, cfg config.Config, decode accounts.Decoder, logger *slog.Logger) error {
 	var cronOptions []cron.Option
 	if fields := strings.Fields(cfg.CronSpec); len(fields) == 6 {
 		cronOptions = append(cronOptions, cron.WithSeconds())
@@ -181,7 +203,7 @@ func serve(ctx context.Context, runner *session.Runner, cfg config.Config, logge
 
 	job := func() {
 		// Re-read every run: replacing the CSV does not need a restart.
-		list, warnings, err := accounts.Load(cfg.AccountsFile)
+		list, warnings, err := accounts.Load(cfg.AccountsFile, decode)
 		if err != nil {
 			logger.Error("讀取帳號失敗，本輪跳過", "file", cfg.AccountsFile, "err", err)
 			return
@@ -211,6 +233,49 @@ func serve(ctx context.Context, runner *session.Runner, cfg config.Config, logge
 	<-scheduler.Stop().Done()
 	logger.Info("已停止")
 	return nil
+}
+
+// resolveKey builds the account-file key from EZPTT_ENCRYPTION_KEY or
+// EZPTT_KEY_FILE. It returns nil when neither is set: a plaintext account file
+// keeps working, with a warning from accounts.Load.
+func resolveKey(cfg config.Config) (*vault.Key, error) {
+	if encoded := strings.TrimSpace(cfg.EncryptionKey); encoded != "" {
+		key, err := vault.NewKey(encoded)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", configKeyEnv, err)
+		}
+		return key, nil
+	}
+	if cfg.KeyFile != "" {
+		encoded, err := vault.ReadKeyFile(cfg.KeyFile)
+		if err != nil {
+			return nil, err
+		}
+		key, err := vault.NewKey(encoded)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", cfg.KeyFile, err)
+		}
+		return key, nil
+	}
+	return nil, nil
+}
+
+// accountDecoder decrypts the account file when it carries the EZPTT magic
+// header, and passes plaintext through untouched.
+func accountDecoder(key *vault.Key) accounts.Decoder {
+	return func(raw []byte) ([]byte, bool, error) {
+		if !vault.IsEncrypted(raw) {
+			return raw, false, nil
+		}
+		if key == nil {
+			return nil, true, fmt.Errorf("帳號檔已加密，但沒有金鑰：設定 %s 或 %s", configKeyEnv, configKeyFileEnv)
+		}
+		plain, err := key.Decrypt(raw)
+		if err != nil {
+			return nil, true, err
+		}
+		return plain, true, nil
+	}
 }
 
 func nextRun(scheduler *cron.Cron) string {

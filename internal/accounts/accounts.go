@@ -5,6 +5,7 @@
 package accounts
 
 import (
+	"bytes"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -12,6 +13,10 @@ import (
 	"os"
 	"strings"
 )
+
+// Decoder turns the raw file bytes into CSV text. encrypted reports whether the
+// file was encrypted, so the caller can warn about plaintext credentials.
+type Decoder func(raw []byte) (plain []byte, encrypted bool, err error)
 
 // Account is one PTT login.
 type Account struct {
@@ -74,9 +79,11 @@ func Parse(r io.Reader) ([]Account, []string, error) {
 	return out, warnings, nil
 }
 
-// Load opens path and parses it. It warns when the file is readable by other
-// users, because it holds plaintext passwords.
-func Load(path string) ([]Account, []string, error) {
+// Load reads path and parses it. decode may be nil, which treats the file as
+// plaintext CSV; a decoder lets an encrypted file be read without ever writing
+// the credentials to disk. Load warns when the file is plaintext or readable by
+// other users.
+func Load(path string, decode Decoder) ([]Account, []string, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, nil, fmt.Errorf("讀取帳號檔 %s: %w", path, err)
@@ -84,18 +91,28 @@ func Load(path string) ([]Account, []string, error) {
 	if info.IsDir() {
 		return nil, nil, fmt.Errorf("帳號檔 %s 是目錄", path)
 	}
-	f, err := os.Open(path)
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, nil, fmt.Errorf("開啟帳號檔 %s: %w", path, err)
 	}
-	defer func() { _ = f.Close() }()
 
-	list, warnings, err := Parse(f)
+	plain, encrypted := raw, false
+	if decode != nil {
+		plain, encrypted, err = decode(raw)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s: %w", path, err)
+		}
+	}
+
+	list, warnings, err := Parse(bytes.NewReader(plain))
 	if err != nil {
 		return nil, warnings, fmt.Errorf("%s: %w", path, err)
 	}
-	if mode := info.Mode().Perm(); mode&0o077 != 0 {
-		warnings = append(warnings, fmt.Sprintf("帳號檔 %s 權限是 %#o，內含明文密碼，建議 chmod 600", path, mode))
+	if !encrypted {
+		warnings = append(warnings, fmt.Sprintf("帳號檔 %s 是明文，建議用 `ezptt encrypt` 加密", path))
+		if mode := info.Mode().Perm(); mode&0o077 != 0 {
+			warnings = append(warnings, fmt.Sprintf("帳號檔 %s 權限是 %#o，內含明文密碼，建議 chmod 600", path, mode))
+		}
 	}
 	return list, warnings, nil
 }

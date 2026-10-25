@@ -35,6 +35,10 @@ type Config struct {
 	// the cron spec. Handy in a container where a restart is the only way to
 	// trigger a run.
 	RunOnStart bool
+	// EncryptionKey is the base64 AES-256 key for an encrypted account file.
+	EncryptionKey string
+	// KeyFile is a 0600 file holding that key; used when EncryptionKey is empty.
+	KeyFile string
 	// WSURL is the PTT websocket endpoint.
 	WSURL string
 	// Origin is the Origin header term.ptt.cc expects.
@@ -172,6 +176,10 @@ func apply(cfg *Config, values map[string]string, source string) error {
 				return fmt.Errorf("%s: RUN_ON_START=%q 不是 true/false", source, value)
 			}
 			cfg.RunOnStart = b
+		case "ENCRYPTION_KEY":
+			cfg.EncryptionKey = value
+		case "KEY_FILE":
+			cfg.KeyFile = value
 		case "WS_URL":
 			cfg.WSURL = value
 		case "ORIGIN":
@@ -194,7 +202,7 @@ func parseDuration(value string) (time.Duration, error) {
 var envKeys = []string{
 	"LOG_LEVEL", "CRON_SPEC", "ACCOUNTS_FILE", "MAX_CONCURRENCY",
 	"LOGIN_TIMEOUT", "READ_TIMEOUT", "HOLD", "INSECURE_TLS", "RUN_ON_START",
-	"WS_URL", "ORIGIN",
+	"ENCRYPTION_KEY", "KEY_FILE", "WS_URL", "ORIGIN",
 }
 
 // envValues reads both EZPTT_KEY and the bare KEY. The bare form matters in a

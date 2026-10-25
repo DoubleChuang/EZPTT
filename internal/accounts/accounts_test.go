@@ -69,20 +69,58 @@ func TestLoadWarnsAboutPermissions(t *testing.T) {
 	if err := os.WriteFile(path, []byte("alice,secret\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	list, warnings, err := Load(path)
+	list, warnings, err := Load(path, nil)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	if len(list) != 1 {
 		t.Fatalf("accounts = %+v", list)
 	}
-	if len(warnings) != 1 || !strings.Contains(warnings[0], "chmod 600") {
+	if len(warnings) != 2 {
+		t.Fatalf("warnings = %v, want plaintext + permissions", warnings)
+	}
+	joined := strings.Join(warnings, " | ")
+	if !strings.Contains(joined, "chmod 600") || !strings.Contains(joined, "明文") {
 		t.Fatalf("warnings = %v", warnings)
 	}
 }
 
+// An encrypted file must not produce plaintext warnings.
+func TestLoadEncryptedHasNoPlaintextWarning(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "PttConfig.csv.enc")
+	if err := os.WriteFile(path, []byte("alice,secret\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	decode := func(raw []byte) ([]byte, bool, error) { return raw, true, nil }
+
+	list, warnings, err := Load(path, decode)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(list) != 1 || list[0].User != "alice" {
+		t.Fatalf("accounts = %+v", list)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %v, want none for an encrypted file", warnings)
+	}
+}
+
+// A decoder error (wrong key) must surface, not be swallowed.
+func TestLoadDecoderError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "PttConfig.csv.enc")
+	if err := os.WriteFile(path, []byte("EZPTT1garbage"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	decode := func([]byte) ([]byte, bool, error) {
+		return nil, true, errors.New("解密失敗")
+	}
+	if _, _, err := Load(path, decode); err == nil || !strings.Contains(err.Error(), "解密失敗") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestLoadMissingFile(t *testing.T) {
-	_, _, err := Load(filepath.Join(t.TempDir(), "nope.csv"))
+	_, _, err := Load(filepath.Join(t.TempDir(), "nope.csv"), nil)
 	if err == nil {
 		t.Fatal("expected an error for a missing file")
 	}

@@ -121,6 +121,22 @@ func TestLoadReadsBareEnvironmentNames(t *testing.T) {
 	}
 }
 
+func TestLoadReadsEncryptionSettings(t *testing.T) {
+	t.Setenv("EZPTT_KEY_FILE", "/run/secrets/key")
+	t.Setenv("EZPTT_ENCRYPTION_KEY", "c2VjcmV0LWtleQ==")
+
+	cfg, _, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.KeyFile != "/run/secrets/key" {
+		t.Fatalf("KeyFile = %q", cfg.KeyFile)
+	}
+	if cfg.EncryptionKey != "c2VjcmV0LWtleQ==" {
+		t.Fatalf("EncryptionKey = %q", cfg.EncryptionKey)
+	}
+}
+
 // The prefixed form must still win when both exist.
 func TestPrefixedEnvWinsOverBare(t *testing.T) {
 	t.Setenv("CRON_SPEC", "15 4 * * *")

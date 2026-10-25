@@ -9,8 +9,10 @@ services:
     # 你的 uid 不是 1000 就設 PUID/PGID。
     user: "${PUID:-1000}:${PGID:-1000}"
     volumes:
-      # PttConfig.csv lives here; the container only ever reads it.
+      # PttConfig.csv／PttConfig.csv.enc lives here; the container only reads it.
       - ./data:/data:ro
+      # 金鑰放容器外（ezptt keygen -out ~/.config/ezptt/key），跟帳號檔分開保管。
+      - ${HOME}/.config/ezptt:/run/secrets:ro
     logging:
       driver: json-file
       options:
