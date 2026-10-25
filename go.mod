@@ -1,12 +1,9 @@
 module github.com/DoubleChuang/EZPTT
 
-go 1.12
+go 1.27
 
 require (
 	github.com/gorilla/websocket v1.5.3
-	github.com/pkg/errors v0.8.1
-	github.com/robfig/cron v1.2.0
-	github.com/spf13/viper v1.8.0
-	go.uber.org/zap v1.17.0
-	golang.org/x/text v0.3.8
+	github.com/robfig/cron/v3 v3.0.1
+	golang.org/x/text v0.43.0
 )

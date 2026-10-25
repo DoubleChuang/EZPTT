@@ -1,4 +1,6 @@
-PttConfig.csv
 bin/
 dist/
-TODO.md
+PttConfig.csv
+ezptt.env
+.env
+*.log
