@@ -35,7 +35,10 @@ USER ezptt
 WORKDIR /data
 
 # Cron runs on local time; keep the container's clock in Taipei time.
-ENV EZPTT_ACCOUNTS_FILE=/data/PttConfig.csv \
-    TZ=Asia/Taipei
+# The account path is NOT baked in: WORKDIR is /data, so the default
+# "PttConfig.csv" resolves to /data/PttConfig.csv, and ACCOUNTS_FILE from
+# env_file can point elsewhere (e.g. PttConfig.csv.enc) without being
+# overridden by a prefixed EZPTT_ variable.
+ENV TZ=Asia/Taipei
 
 ENTRYPOINT ["/usr/local/bin/ezptt"]
