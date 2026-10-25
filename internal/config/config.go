@@ -190,15 +190,26 @@ func parseDuration(value string) (time.Duration, error) {
 	return time.ParseDuration(value)
 }
 
+// envKeys are the settings read from the environment.
+var envKeys = []string{
+	"LOG_LEVEL", "CRON_SPEC", "ACCOUNTS_FILE", "MAX_CONCURRENCY",
+	"LOGIN_TIMEOUT", "READ_TIMEOUT", "HOLD", "INSECURE_TLS", "RUN_ON_START",
+	"WS_URL", "ORIGIN",
+}
+
+// envValues reads both EZPTT_KEY and the bare KEY. The bare form matters in a
+// container: docker compose's env_file injects names verbatim, so a file
+// written for docker ("CRON_SPEC=…") would otherwise be ignored silently.
+// The prefixed form wins when both are set.
 func envValues() map[string]string {
 	out := map[string]string{}
-	for _, key := range []string{
-		"LOG_LEVEL", "CRON_SPEC", "ACCOUNTS_FILE", "MAX_CONCURRENCY",
-		"LOGIN_TIMEOUT", "READ_TIMEOUT", "HOLD", "INSECURE_TLS", "RUN_ON_START",
-		"WS_URL", "ORIGIN",
-	} {
+	for _, key := range envKeys {
 		if v, ok := os.LookupEnv(EnvPrefix + key); ok {
-			out[EnvPrefix+key] = v
+			out[key] = v
+			continue
+		}
+		if v, ok := os.LookupEnv(key); ok {
+			out[key] = v
 		}
 	}
 	return out

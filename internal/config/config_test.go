@@ -100,6 +100,41 @@ func TestLoadRejectsBadValues(t *testing.T) {
 	}
 }
 
+// docker compose's env_file injects bare names, not EZPTT_-prefixed ones.
+func TestLoadReadsBareEnvironmentNames(t *testing.T) {
+	t.Setenv("CRON_SPEC", "15 4 * * *")
+	t.Setenv("LOG_LEVEL", "debug")
+	t.Setenv("RUN_ON_START", "true")
+
+	cfg, _, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.CronSpec != "15 4 * * *" {
+		t.Fatalf("CronSpec = %q, the bare env name was ignored", cfg.CronSpec)
+	}
+	if cfg.LogLevel != "debug" {
+		t.Fatalf("LogLevel = %q", cfg.LogLevel)
+	}
+	if !cfg.RunOnStart {
+		t.Fatal("RUN_ON_START from the environment was ignored")
+	}
+}
+
+// The prefixed form must still win when both exist.
+func TestPrefixedEnvWinsOverBare(t *testing.T) {
+	t.Setenv("CRON_SPEC", "15 4 * * *")
+	t.Setenv(EnvPrefix+"CRON_SPEC", "45 5 * * *")
+
+	cfg, _, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.CronSpec != "45 5 * * *" {
+		t.Fatalf("CronSpec = %q, want the EZPTT_ prefixed value", cfg.CronSpec)
+	}
+}
+
 func TestParseDurationAcceptsBareSeconds(t *testing.T) {
 	d, err := parseDuration("90")
 	if err != nil || d != 90*time.Second {
