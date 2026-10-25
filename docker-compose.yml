@@ -1,0 +1,16 @@
+services:
+  ezptt:
+    image: doublehub/ezptt:latest
+    container_name: ezptt
+    restart: unless-stopped
+    env_file:
+      - ezptt.env
+    volumes:
+      # PttConfig.csv lives here; the container only ever reads it.
+      - ./data:/data:ro
+    logging:
+      driver: json-file
+      options:
+        # A daemon that runs for months must not fill the SD card.
+        max-size: "10m"
+        max-file: "3"

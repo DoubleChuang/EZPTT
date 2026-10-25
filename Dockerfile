@@ -1,22 +1,41 @@
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Stage 1
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# syntax=docker/dockerfile:1.7
 
-FROM golang:1.14 as builder
+# ── Stage 1: cross-compile ──────────────────────────────────────────────
+# Runs on the build host's architecture and cross-compiles for the target,
+# so an arm64/armv7 image does not need QEMU to run the Go compiler.
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
 
-ENV GO111MODULE=on
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETVARIANT
+ARG VERSION=dev
 
-WORKDIR /app
+WORKDIR /src
+
+# Dependencies first: this layer is cached until go.mod/go.sum change.
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
+    go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/ezptt ./cmd/ezptt
 
-RUN make local
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Stage 2 
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# ── Stage 2: runtime ────────────────────────────────────────────────────
+FROM alpine:3.22
 
-FROM busybox
+# ca-certificates is not optional: the login travels over TLS and is verified.
+RUN apk add --no-cache ca-certificates tzdata \
+    && adduser -D -H -u 10001 -s /sbin/nologin ezptt
 
-COPY --from=builder /app/bin/ /app/bin/
+COPY --from=build /out/ezptt /usr/local/bin/ezptt
 
-ENTRYPOINT ["/app/bin/EZPTT"]
+USER ezptt
+WORKDIR /data
+
+# Cron runs on local time; keep the container's clock in Taipei time.
+ENV EZPTT_ACCOUNTS_FILE=/data/PttConfig.csv \
+    TZ=Asia/Taipei
+
+ENTRYPOINT ["/usr/local/bin/ezptt"]
