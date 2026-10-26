@@ -97,6 +97,14 @@ ACCOUNTS_FILE=/data/PttConfig.csv.enc
 KEY_FILE=/run/secrets/key
 ```
 
+之後要改帳號就別再手打那串指令，用附的腳本：
+
+```console
+./accounts.sh            # 解密 → $EDITOR → 驗證 → 重新加密 → shred 明文
+```
+
+明文只會短暫存在 `mktemp -d` 的 0700 目錄；新檔會先解密回讀比對成功才原子替換，舊密文留一份 `.bak`。
+
 格式是 `EZPTT1 || nonce(12) || AES-256-GCM ciphertext+tag`：每次加密用新的隨機 nonce，GCM 會驗證完整性，金鑰不對或檔案被改一個 byte 都直接報錯，不會默默讀進壞掉的帳號清單。手動檢查用 `ezptt decrypt -in PttConfig.csv.enc`。
 
 **能防**：檔案被 scp／備份／丟進 git、別人 `cat` 你的 data 目錄。
